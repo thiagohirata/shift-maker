@@ -1,4 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom";
-
-ReactDOM.render(<p>Hi</p>, document.getElementById("root"));
+import ShiftView from "./ShiftView";
+ReactDOM.render(
+  <>
+    <h1>9</h1>
+    <ShiftView />
+  </>,
+  document.getElementById("root")
+);

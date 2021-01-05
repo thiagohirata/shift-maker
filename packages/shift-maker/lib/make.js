@@ -11,6 +11,8 @@ var _isWithinInterval = _interopRequireDefault(require("date-fns/isWithinInterva
 
 var _differenceInCalendarDays = _interopRequireDefault(require("date-fns/differenceInCalendarDays"));
 
+var _dateFns = require("date-fns");
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
 function _createForOfIteratorHelper(o, allowArrayLike) { var it; if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = o[Symbol.iterator](); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it["return"] != null) it["return"](); } finally { if (didErr) throw err; } } }; }
@@ -65,19 +67,24 @@ var participantSorter = function participantSorter(date) {
   return function (p1, p2) {
     return [function (p1) {
       return p1.remainingSlots > 1 ? -1 : 0;
-    }, function (p1) {
-      return Math.round(-0.5 * Math.min.apply(Math, [Number.MAX_VALUE].concat(_toConsumableArray(p1.pickedDates.map(function (pickedDate) {
-        return Math.min(Math.abs((0, _differenceInCalendarDays["default"])(date, pickedDate.start)));
-      })))));
-    }, function (p1) {
+    }, //coloca na frente quem tem slots
+    function (p1) {
+      return Math.min.apply(Math, [Number.MAX_VALUE].concat(_toConsumableArray(p1.pickedDates.map(function (pickedDate) {
+        return Math.abs((0, _differenceInCalendarDays["default"])(date, pickedDate.start));
+      })))) > 7 ? 0 : 1;
+    }, //está ocupado a menos de uma semana
+    function (p1) {
       return -1 * Math.round(0.6 * p1.remainingSlots / p1.totalSlots);
-    }, function (p1) {
+    }, // usou mais 10% slots 
+    function (p1) {
       return -1 * Math.min.apply(Math, [Number.MAX_VALUE].concat(_toConsumableArray(p1.pickedDates.map(function (pickedDate) {
         return Math.min(Math.abs((0, _differenceInCalendarDays["default"])(date, pickedDate.start)));
       }))));
-    }, function (p1) {
+    }, //dias de distância para outros slots usados
+    function (p1) {
       return -1 * Math.round(100 * p1.remainingSlots / p1.totalSlots);
-    }, function (p1) {
+    }, // usou mais % slots 
+    function (p1) {
       return p1.pickedDates.length;
     }, function (p1) {
       return p1.numberOfDays;
@@ -93,23 +100,33 @@ var make = function make(calendarConfig, participants) {
     return acc + (r.onlyOncePerMonth ? 0.5 : 1) * (12 - r.vacationTime);
   }, 0);
   var expectedSlotsPerParticipantMonth = calendar.slotCount / participantMonthCount;
-  var participantsWithStats = participants.map(function (r) {
+  var participantsWithStats = participants.map(function (r, participantIndex) {
+    var pickedDates = r.pickedDays ? r.pickedDays.map(function (p) {
+      return calendar.days.find(function (d) {
+        return (0, _dateFns.isSameDay)(p.start, d.start);
+      });
+    }) : [];
+    pickedDates.forEach(function (p) {
+      return p.slots[p.slots.findIndex(function (x) {
+        return !x;
+      })] = participantIndex;
+    });
+    var remainingSlots = (r.onlyOncePerMonth ? 0.5 : 1) * (12 - r.vacationTime) * expectedSlotsPerParticipantMonth;
     return _objectSpread(_objectSpread({}, r), {}, {
-      numberOfHolidays: 0,
-      numberOfWeekends: 0,
-      numberOfDays: 0,
-      pickedDates: [],
+      numberOfHolidays: pickedDates.filter(function (p) {
+        return p.holiday;
+      }).length,
+      numberOfDays: pickedDates.reduce(function (acc, currentDate) {
+        return acc + (0, _differenceInCalendarDays["default"])(currentDate.end, currentDate.start);
+      }, 0),
+      pickedDates: pickedDates,
       blockedDateRanges: _toConsumableArray(r.vacationDays),
       totalSlots: (r.onlyOncePerMonth ? 0.5 : 1) * (12 - r.vacationTime) * expectedSlotsPerParticipantMonth,
-      remainingSlots: (r.onlyOncePerMonth ? 0.5 : 1) * (12 - r.vacationTime) * expectedSlotsPerParticipantMonth
+      remainingSlots: remainingSlots - (pickedDates === null || pickedDates === void 0 ? void 0 : pickedDates.length)
     });
   });
 
   var sortedDates = _toConsumableArray(calendar.days).sort(dateSorter);
-
-  console.log(sortedDates.map(function (r) {
-    return r.holidayName;
-  }).join(","));
 
   var _iterator = _createForOfIteratorHelper(sortedDates),
       _step;
@@ -120,6 +137,7 @@ var make = function make(calendarConfig, participants) {
       var isHoliday = currentDate.holiday;
 
       for (var i = 0; i < currentDate.numberOfSlots; i++) {
+        if (currentDate.slots[i]) continue;
         var participant = participantsWithStats.filter(filter(currentDate)).sort(participantSorter(currentDate.start))[0];
         var participantIndex = participant && participantsWithStats.indexOf(participant);
 

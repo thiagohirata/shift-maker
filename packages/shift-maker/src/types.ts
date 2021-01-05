@@ -36,4 +36,6 @@ export interface Participant {
   onlyOncePerMonth: boolean;
   vacationTime: number;
   vacationDays: Array<{ start: Date; end: Date }>;
+  pickedDays: Array<{ start: Date }>;
+  color?: string;
 }
